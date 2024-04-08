@@ -1,0 +1,33 @@
+[package]
+name = "pantheon-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.81"
+async-trait = "0.1.79"
+axum = { version = "0.7.5", features = [
+  "http2",
+  "ws",
+  "macros",
+  "multipart",
+  "tracing",
+  "tokio",
+  "form",
+  "query",
+] }
+jsonwebtoken = "9.3.0"
+reqwest = { version = "0.12.3", features = [
+  "cookies",
+  "gzip",
+  "brotli",
+  "json",
+  "multipart",
+  "stream",
+] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+serde_with = "3.7.0"
+tokio = { version = "1.37.0", features = ["full"] }
