@@ -2,6 +2,7 @@ use state::{AppState, State};
 
 mod app;
 mod auth;
+mod services;
 mod state;
 
 #[tokio::main]
