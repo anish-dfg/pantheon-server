@@ -1,19 +1,21 @@
-use auth::{auth0::Auth0, Authenticator};
+mod app;
+mod cli;
+mod services;
+mod state;
+
 use clap::Parser;
 use cli::Args;
 use state::{AppState, State};
 
-mod app;
-mod auth;
-mod cli;
-mod state;
+use services::auth::{auth0::Auth0, Authenticator};
+
+use crate::services::workspace::service_account::ServiceAccountWorkspaceClient;
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().expect("error loading environment variables");
 
     let args = Args::parse();
-    dbg!(&args);
 
     let authenticator = Authenticator::Token(Box::new(
         Auth0::new(&args.auth0_tenant_uri, args.auth0_audiences)
@@ -21,7 +23,17 @@ async fn main() {
             .expect("error initializing auth backend"),
     ));
 
-    let state = AppState::new(State { authenticator });
+    let workspace_client = Box::new(ServiceAccountWorkspaceClient::new(
+        &args.workspace_client_email,
+        &args.workspace_private_key_id,
+        &args.workspace_private_key,
+        &args.workspace_token_uri,
+    ));
+
+    let state = AppState::new(State {
+        authenticator,
+        workspace_client,
+    });
     let router = app::routes(state);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8888")
         .await

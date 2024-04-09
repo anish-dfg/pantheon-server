@@ -76,7 +76,7 @@ impl Auth0 {
 
 #[async_trait]
 impl TokenAuthenticator for Auth0 {
-    async fn authenticate(&self, token: &str) -> anyhow::Result<super::userdata::UserData> {
+    async fn authenticate(&self, token: &str) -> Result<UserData> {
         let http = &self.http;
         let jwks_uri = &self.configuration.jwks_uri;
 
@@ -85,6 +85,7 @@ impl TokenAuthenticator for Auth0 {
             .send()
             .await
             .context("fetch auth0 jwks")?;
+
         let jwks = res
             .json::<JwkSet>()
             .await

@@ -18,6 +18,7 @@ axum = { version = "0.7.5", features = [
   "form",
   "query",
 ] }
+chrono = "0.4.37"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 jsonwebtoken = "9.3.0"
