@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
-pub struct State {}
+use crate::auth::Authenticator;
+
+pub struct State {
+    pub authenticator: Authenticator,
+}
 
 pub type AppState = Arc<State>;

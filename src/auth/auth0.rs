@@ -35,8 +35,8 @@ pub struct Auth0Configuration {
     pub request_uri_parameter_supported: bool,
     pub request_parameter_supported: bool,
     pub token_endpoint_auth_signing_alg_values_supported: Vec<String>,
-    pub backchannel_logout_supported: bool,
-    pub backchannel_logout_session_supported: bool,
+    pub backchannel_logout_supported: Option<bool>,
+    pub backchannel_logout_session_supported: Option<bool>,
     pub end_session_endpoint: String,
 }
 
