@@ -7,7 +7,7 @@ use clap::Parser;
 use cli::Args;
 use state::{AppState, State};
 
-use services::auth::{auth0::Auth0, Authenticator};
+use services::{airtable::Airtable, auth::auth0::Auth0};
 
 use crate::services::workspace::service_account::ServiceAccountWorkspaceClient;
 
@@ -17,11 +17,11 @@ async fn main() {
 
     let args = Args::parse();
 
-    let authenticator = Authenticator::Token(Box::new(
+    let authenticator = Box::new(
         Auth0::new(&args.auth0_tenant_uri, args.auth0_audiences)
             .await
             .expect("error initializing auth backend"),
-    ));
+    );
 
     let workspace_client = Box::new(ServiceAccountWorkspaceClient::new(
         &args.workspace_client_email,
@@ -30,9 +30,12 @@ async fn main() {
         &args.workspace_token_uri,
     ));
 
+    let airtable = Airtable::new(&args.airtable_api_token);
+
     let state = AppState::new(State {
         authenticator,
         workspace_client,
+        airtable,
     });
     let router = app::routes(state);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8888")

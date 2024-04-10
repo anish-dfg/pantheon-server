@@ -75,7 +75,7 @@ impl Airtable {
         let data = res
             .json::<ListRecordsResponse<T>>()
             .await
-            .expect("deserialize airtable records");
+            .context("deserialize airtable records")?;
 
         Ok(data.records)
     }

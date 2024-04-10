@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use crate::services::{auth::Authenticator, workspace::WorkspaceClient};
+use crate::services::{airtable::Airtable, auth::Authenticator, workspace::WorkspaceClient};
 
 pub struct State {
-    pub authenticator: Authenticator,
+    pub authenticator: Box<dyn Authenticator>,
     pub workspace_client: Box<dyn WorkspaceClient>,
+    pub airtable: Airtable,
 }
 
 pub type AppState = Arc<State>;

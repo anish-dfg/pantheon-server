@@ -1,3 +1,5 @@
+mod controllers;
+
 use axum::{http::StatusCode, routing, Router};
 
 use crate::state::AppState;

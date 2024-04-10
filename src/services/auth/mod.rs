@@ -7,10 +7,6 @@ use async_trait::async_trait;
 use self::userdata::UserData;
 
 #[async_trait]
-pub trait TokenAuthenticator: Send + Sync {
+pub trait Authenticator: Send + Sync {
     async fn authenticate(&self, token: &str) -> Result<UserData>;
-}
-
-pub enum Authenticator {
-    Token(Box<dyn TokenAuthenticator>),
 }

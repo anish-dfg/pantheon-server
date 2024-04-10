@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use super::{
     userdata::{Auth0UserData, UserData},
-    TokenAuthenticator,
+    Authenticator,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +50,7 @@ pub struct Auth0 {
 
 impl Auth0 {
     const DISCOVERY_ENDPOINT_SUFFIX: &'static str = "/.well-known/openid-configuration";
+    const USERINFO_ENDPOINT: &'static str = "/userinfo";
 
     pub async fn new(tenant_base_uri: &str, audiences: Vec<String>) -> Result<Self> {
         let http = Client::new();
@@ -75,7 +76,7 @@ impl Auth0 {
 }
 
 #[async_trait]
-impl TokenAuthenticator for Auth0 {
+impl Authenticator for Auth0 {
     async fn authenticate(&self, token: &str) -> Result<UserData> {
         let http = &self.http;
         let jwks_uri = &self.configuration.jwks_uri;
@@ -109,7 +110,7 @@ impl TokenAuthenticator for Auth0 {
             bail!("no matching key id")
         };
 
-        let token_data = match jwk.algorithm {
+        let _ = match jwk.algorithm {
             AlgorithmParameters::EllipticCurve(_) => bail!("unimplemented algorithm"),
             AlgorithmParameters::RSA(rsa) => {
                 let (n, e) = (rsa.n, rsa.e);
@@ -121,7 +122,7 @@ impl TokenAuthenticator for Auth0 {
                         .context("create decoding key from rsa components")?,
                     &validator,
                 ) else {
-                    bail!("verify token using rsa components");
+                    bail!("unable to verify token signature");
                 };
                 decoded
             }
@@ -129,7 +130,21 @@ impl TokenAuthenticator for Auth0 {
             AlgorithmParameters::OctetKeyPair(_) => bail!("unimplemented algorithm"),
         };
 
-        dbg!(&token_data);
+        // let userinfo_endpoint = self.tenant_base_uri.clone() + Self::USERINFO_ENDPOINT;
+        // let userinfo_res = self
+        //     .http
+        //     .get(userinfo_endpoint)
+        //     .header("Authorization", format!("Bearer {token}"))
+        //     .send()
+        //     .await
+        //     .context("fetch user info")?;
+        //
+        // let user_data = userinfo_res
+        //     .text()
+        //     .await
+        //     .context("deserialize user information")?;
+        //
+        // dbg!(&user_data);
 
         Ok(UserData::Auth0(Auth0UserData {}))
     }
