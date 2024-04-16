@@ -16,4 +16,8 @@ pub struct Args {
     pub workspace_token_uri: String,
     #[arg(long, env)]
     pub airtable_api_token: String,
+    #[arg(long, env)]
+    pub database_url: String,
+    #[arg(long, env)]
+    pub cache_url: String,
 }

@@ -8,8 +8,7 @@ use crate::services::airtable::{Airtable, ListRecordsOptions};
 pub async fn test_list_records() {
     dotenvy::dotenv().expect("error loading environment variables");
 
-    let airtable =
-        Airtable::new(&env::var("AIRTABLE_API_TOKEN").expect("missing airtable api token"));
+    let airtable = Airtable::new(&env::var("AIRTABLE_API_TOKEN").expect("missing airtable api token"));
 
     let (airtable_base, airtable_table, airtable_view) = (
         env::var("TEST_AIRTABLE_BASE").expect("missing test airtable base env variable"),
@@ -34,6 +33,7 @@ pub async fn test_list_records() {
             &ListRecordsOptions {
                 view: Some(airtable_view),
                 fields: Some(vec!["FirstName".into(), "LastName".into(), "Email".into()]),
+                offset: None,
             },
         )
         .await

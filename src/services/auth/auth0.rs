@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use jsonwebtoken::{
     jwk::{AlgorithmParameters, JwkSet},
     DecodingKey, Validation,
@@ -8,10 +9,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{
-    userdata::{Auth0UserData, UserData},
-    Authenticator,
-};
+use super::{userdata::UserData, Authenticator};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Auth0Configuration {
@@ -48,6 +46,17 @@ pub struct Auth0 {
     http: Client,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UserInfo {
+    pub sub: String,
+    pub nickname: String,
+    pub name: String,
+    pub picture: String,
+    pub updated_at: DateTime<Utc>,
+    pub email: String,
+    pub email_verified: bool,
+}
+
 impl Auth0 {
     const DISCOVERY_ENDPOINT_SUFFIX: &'static str = "/.well-known/openid-configuration";
     const USERINFO_ENDPOINT: &'static str = "/userinfo";
@@ -81,36 +90,23 @@ impl Authenticator for Auth0 {
         let http = &self.http;
         let jwks_uri = &self.configuration.jwks_uri;
 
-        let res = http
-            .get(jwks_uri)
-            .send()
-            .await
-            .context("fetch auth0 jwks")?;
+        let res = http.get(jwks_uri).send().await.context("fetch auth0 jwks")?;
 
-        let jwks = res
-            .json::<JwkSet>()
-            .await
-            .context("deserialize auth0 jwks")?;
+        let jwks = res.json::<JwkSet>().await.context("deserialize auth0 jwks")?;
 
         let header = jsonwebtoken::decode_header(token).context("decode auth0 token header")?;
 
-        let Some(kid) = header.kid else {
-            bail!("missing key id")
-        };
+        let Some(kid) = header.kid else { bail!("missing key id") };
 
         // check if any valid jwk id matches the kid in the token header
-        let Some(jwk) = jwks
-            .keys
-            .into_iter()
-            .find(|jwk| match jwk.common.key_id.clone() {
-                Some(jwk_id) => jwk_id == kid,
-                None => false,
-            })
-        else {
+        let Some(jwk) = jwks.keys.into_iter().find(|jwk| match jwk.common.key_id.clone() {
+            Some(jwk_id) => jwk_id == kid,
+            None => false,
+        }) else {
             bail!("no matching key id")
         };
 
-        let _ = match jwk.algorithm {
+        let decoded = match jwk.algorithm {
             AlgorithmParameters::EllipticCurve(_) => bail!("unimplemented algorithm"),
             AlgorithmParameters::RSA(rsa) => {
                 let (n, e) = (rsa.n, rsa.e);
@@ -118,8 +114,7 @@ impl Authenticator for Auth0 {
                 validator.set_audience(&self.audiences);
                 let Ok(decoded) = jsonwebtoken::decode::<Value>(
                     token,
-                    &DecodingKey::from_rsa_components(&n, &e)
-                        .context("create decoding key from rsa components")?,
+                    &DecodingKey::from_rsa_components(&n, &e).context("create decoding key from rsa components")?,
                     &validator,
                 ) else {
                     bail!("unable to verify token signature");
@@ -130,22 +125,20 @@ impl Authenticator for Auth0 {
             AlgorithmParameters::OctetKeyPair(_) => bail!("unimplemented algorithm"),
         };
 
-        // let userinfo_endpoint = self.tenant_base_uri.clone() + Self::USERINFO_ENDPOINT;
-        // let userinfo_res = self
-        //     .http
-        //     .get(userinfo_endpoint)
-        //     .header("Authorization", format!("Bearer {token}"))
-        //     .send()
-        //     .await
-        //     .context("fetch user info")?;
-        //
-        // let user_data = userinfo_res
-        //     .text()
-        //     .await
-        //     .context("deserialize user information")?;
-        //
-        // dbg!(&user_data);
+        let userinfo_endpoint = self.tenant_base_uri.clone() + Self::USERINFO_ENDPOINT;
+        let userinfo_res = self
+            .http
+            .get(userinfo_endpoint)
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await
+            .context("fetch user info")?;
 
-        Ok(UserData::Auth0(Auth0UserData {}))
+        let user_data = userinfo_res
+            .json::<UserInfo>()
+            .await
+            .context("deserialize user information")?;
+
+        Ok(UserData::Auth0(user_data))
     }
 }

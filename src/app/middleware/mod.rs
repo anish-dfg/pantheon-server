@@ -16,7 +16,7 @@ use super::errors::AppError;
 pub async fn auth(
     State(state): State<AppState>,
     auth_header: TypedHeader<Authorization<Bearer>>,
-    req: Request,
+    mut req: Request,
     next: Next,
 ) -> Result<impl IntoResponse, AppError> {
     let token = auth_header.0.token();
@@ -26,6 +26,9 @@ pub async fn auth(
     let data = authenticator.authenticate(token).await?;
 
     match data {
-        UserData::Auth0(data) => Ok(next.run(req).await),
+        UserData::Auth0(_) => {
+            req.extensions_mut().insert(data);
+            Ok(next.run(req).await)
+        }
     }
 }

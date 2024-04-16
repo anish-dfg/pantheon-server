@@ -4,10 +4,15 @@ mod errors;
 mod middleware;
 
 use axum::{routing, Router};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::state::AppState;
 
 pub fn routes(state: AppState) -> Router<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     let api = api::routes(state.clone());
     Router::new()
         .fallback(controllers::fallback)
@@ -18,4 +23,6 @@ pub fn routes(state: AppState) -> Router<()> {
             state,
             middleware::auth,
         ))
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
 }

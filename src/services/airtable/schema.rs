@@ -1,3 +1,8 @@
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -38,4 +43,10 @@ pub struct Table {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Schema {
     pub tables: Vec<Table>,
+}
+
+impl IntoResponse for Schema {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
 }
