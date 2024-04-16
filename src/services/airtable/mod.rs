@@ -16,14 +16,14 @@ pub struct Airtable {
     pub api_token: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ListRecordsOptions {
     pub fields: Option<Vec<String>>,
     pub view: Option<String>,
     pub offset: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ListRecordsResponse<T> {
     pub records: Vec<Record<T>>,
     pub offset: Option<String>,
@@ -72,6 +72,33 @@ impl Airtable {
             .await
             .context("error deserializing airtable base schema")?;
         Ok(schema)
+    }
+
+    pub async fn list_all_records<T>(
+        &self,
+        base_id: &str,
+        table_id_or_name: &str,
+        opts: &mut ListRecordsOptions,
+    ) -> Result<Vec<Record<T>>>
+    where
+        T: DeserializeOwned + Clone,
+    {
+        let mut res = self.list_records::<T>(base_id, table_id_or_name, opts).await?;
+        let mut records = res.records.clone();
+        opts.offset = res.offset.clone();
+
+        dbg!(&records.len());
+        let mut length = res.records.len();
+
+        while length >= 100 {
+            res = self.list_records::<T>(base_id, table_id_or_name, opts).await?;
+            length = res.records.len();
+            opts.offset = res.offset.clone();
+            records.append(&mut res.records);
+            dbg!(&records.len());
+        }
+
+        Ok(records)
     }
 
     pub async fn list_records<T>(

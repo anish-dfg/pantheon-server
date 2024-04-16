@@ -13,7 +13,10 @@ use crate::{
     services::{
         airtable::{ListRecordsOptions, ListRecordsResponse},
         auth::userdata::UserData,
-        storage::entities::{CreateDatasourceView, CreateUser, DatasourceView},
+        storage::{
+            entities::{CreateDatasourceView, CreateUser, DatasourceView},
+            Cache,
+        },
     },
     state::AppState,
 };
@@ -82,8 +85,19 @@ pub async fn fetch_datasource_view_data(
         return Ok((StatusCode::BAD_REQUEST, "requested datasource view does not exist").into_response());
     };
 
+    if datasource.as_str() != "airtable" {
+        return Ok((StatusCode::BAD_REQUEST, "unimplemented datasource").into_response());
+    };
+
     let id = datasource_view.id.clone().to_string();
-    let cached = cache.get_json::<CachedDatasourceView>(&id).await?;
+    if let Some(cached) = cache.get_json::<CachedDatasourceView>(&id).await? {
+        log::info!("returning cached");
+        return Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({"records": cached.data, "cached": true})),
+        )
+            .into_response());
+    };
 
     // if let Some(cached) = cached {
     //     if let Some(fields) = cached.record.metadata["fields"]
@@ -92,10 +106,6 @@ pub async fn fetch_datasource_view_data(
     //     {};
     //     return Ok((StatusCode::OK, Json(cached.data)).into_response());
     // };
-
-    if datasource.as_str() != "airtable" {
-        return Ok((StatusCode::BAD_REQUEST, "unimplemented datasource").into_response());
-    };
 
     let (Some(base), Some(table), Some(view)) = (
         datasource_view.metadata["base"].as_str(),
@@ -107,11 +117,11 @@ pub async fn fetch_datasource_view_data(
 
     match payload {
         DatasourceViewRequest::Airtable { offset } => {
-            let records = airtable
-                .list_records::<Value>(
+            let records_response = airtable
+                .list_all_records::<Value>(
                     base,
                     table,
-                    &ListRecordsOptions {
+                    &mut ListRecordsOptions {
                         fields: None,
                         view: view.to_owned().into(),
                         offset,
@@ -119,7 +129,24 @@ pub async fn fetch_datasource_view_data(
                 )
                 .await?;
 
-            Ok((StatusCode::OK, Json(DatasourceViewData::Airtable(records))).into_response())
+            cache
+                .set_json(
+                    &id,
+                    CachedDatasourceView {
+                        record: datasource_view.clone(),
+                        data: serde_json::to_value(&records_response)?,
+                    },
+                )
+                .await?;
+
+            Ok((
+                StatusCode::OK,
+                Json(DatasourceViewData::Airtable(ListRecordsResponse {
+                    records: records_response,
+                    offset: None,
+                })),
+            )
+                .into_response())
         }
         DatasourceViewRequest::Google => Ok((StatusCode::BAD_REQUEST).into_response()),
     }

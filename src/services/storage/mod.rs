@@ -58,8 +58,12 @@ impl Cache {
     {
         let mut conn = self.redis.get().await?;
         let json: Option<String> = conn.get(key).await?;
+
         if let Some(json) = json {
-            let s: T = serde_json::from_str(&json)?;
+            let s: T = serde_json::from_str(&json).map_err(|e| {
+                log::error!("{}", e.to_string());
+                e
+            })?;
             Ok(Some(s))
         } else {
             Ok(None)

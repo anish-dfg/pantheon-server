@@ -40,8 +40,8 @@ pub struct CreateDatasourceView {
     pub user_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-#[serde(rename_all(serialize = "camelCase"))]
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct DatasourceView {
     pub id: Uuid,
     pub user_id: Uuid,
