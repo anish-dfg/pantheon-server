@@ -8,7 +8,7 @@ pub enum DatasourceView {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateDatasourceViewRequest {
+pub struct CreateDatasourceViewRequest1 {
     pub view_name: String,
     pub datasource_name: String,
     pub description: String,
@@ -26,3 +26,33 @@ pub enum DatasourceViewRequest {
 // pub enum DatasourceViewData {
 //     Airtable(ListRecordsResponse<Value>),
 // }
+//
+//
+//
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AirtableDatasourceViewRequestMetadata {
+    pub is_user_table: bool,
+    pub user_first_name_column: Option<String>,
+    pub user_last_name_column: Option<String>,
+    pub user_email_column: Option<String>,
+    pub base: String,
+    pub table: String,
+    pub view: String,
+    pub fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DatasourceViewRequestMetadata {
+    Airtable(AirtableDatasourceViewRequestMetadata),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDatasourceViewRequest {
+    pub name: String,
+    pub description: String,
+    pub metadata: AirtableDatasourceViewRequestMetadata,
+}

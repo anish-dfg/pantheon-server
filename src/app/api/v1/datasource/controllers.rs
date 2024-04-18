@@ -21,12 +21,41 @@ use crate::{
     state::AppState,
 };
 
-use super::requests::{CreateDatasourceViewRequest, DatasourceViewRequest};
+use super::requests::{CreateDatasourceViewRequest, CreateDatasourceViewRequest1, DatasourceViewRequest};
+
+pub async fn create_airtable(
+    State(state): State<AppState>,
+    Extension(user_info): Extension<UserData>,
+    Json(payload): Json<CreateDatasourceViewRequest>,
+) -> Result<Response, AppError> {
+    let storage = &state.sql;
+    let UserData::Auth0(user_info) = user_info;
+    let user_id = storage
+        .create_or_fetch_user(CreateUser {
+            email: user_info.email,
+            first_name: user_info.nickname,
+            last_name: "".into(),
+            image_uri: user_info.picture,
+        })
+        .await?;
+
+    let _ = storage
+        .create_datasource_view(CreateDatasourceView {
+            view_name: payload.name.clone(),
+            datasource_name: "airtable".to_owned(),
+            metadata: serde_json::to_value(payload.metadata)?,
+            description: payload.description.clone(),
+            user_id,
+        })
+        .await?;
+
+    Ok((StatusCode::CREATED).into_response())
+}
 
 pub async fn create(
     State(state): State<AppState>,
     Extension(user_info): Extension<UserData>,
-    Json(payload): Json<CreateDatasourceViewRequest>,
+    Json(payload): Json<CreateDatasourceViewRequest1>,
 ) -> Result<Response, AppError> {
     let storage = &state.sql;
     let UserData::Auth0(user_info) = user_info;
@@ -94,18 +123,10 @@ pub async fn fetch_datasource_view_data(
         log::info!("returning cached");
         return Ok((
             StatusCode::OK,
-            Json(serde_json::json!({"records": cached.data, "cached": true})),
+            Json(serde_json::json!({"records": cached.data, "cached": true, "view": cached.record})),
         )
             .into_response());
     };
-
-    // if let Some(cached) = cached {
-    //     if let Some(fields) = cached.record.metadata["fields"]
-    //         .as_array()
-    //         .and_then(|fields| fields.iter().map(|f| f.as_str()).collect::<Vec<&str>>())
-    //     {};
-    //     return Ok((StatusCode::OK, Json(cached.data)).into_response());
-    // };
 
     let (Some(base), Some(table), Some(view)) = (
         datasource_view.metadata["base"].as_str(),
@@ -122,7 +143,9 @@ pub async fn fetch_datasource_view_data(
                     base,
                     table,
                     &mut ListRecordsOptions {
-                        fields: None,
+                        fields: datasource_view.metadata["fields"]
+                            .as_array()
+                            .map(|fields| fields.iter().filter_map(|f| f.as_str()).map(|f| f.to_owned()).collect()),
                         view: view.to_owned().into(),
                         offset,
                     },
@@ -141,10 +164,7 @@ pub async fn fetch_datasource_view_data(
 
             Ok((
                 StatusCode::OK,
-                Json(DatasourceViewData::Airtable(ListRecordsResponse {
-                    records: records_response,
-                    offset: None,
-                })),
+                Json(serde_json::json!({"records": records_response, "view": datasource_view})),
             )
                 .into_response())
         }

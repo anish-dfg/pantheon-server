@@ -61,7 +61,7 @@ impl Cache {
 
         if let Some(json) = json {
             let s: T = serde_json::from_str(&json).map_err(|e| {
-                log::error!("{}", e.to_string());
+                log::warn!("{}", e.to_string());
                 e
             })?;
             Ok(Some(s))

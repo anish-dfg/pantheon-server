@@ -1,5 +1,7 @@
 mod controllers;
+mod helpers;
 mod requests;
+mod responses;
 
 use axum::{http::StatusCode, routing, Router};
 
@@ -13,5 +15,6 @@ pub fn routes(state: AppState) -> Router<()> {
             "/:datasource/:id",
             routing::post(controllers::fetch_datasource_view_data),
         )
+        .route("/airtable", routing::post(controllers::create_airtable))
         .with_state(state)
 }
