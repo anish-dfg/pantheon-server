@@ -7,11 +7,12 @@ use mobc_redis::redis::AsyncCommands;
 use mobc_redis::{redis, RedisConnectionManager};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use uuid::Uuid;
 
-use self::entities::{CreateDatasourceView, CreateUser, DatasourceView, EditUser, User};
+use self::entities::{CreateDatasourceView, CreateJob, CreateUser, DatasourceView, EditUser, MarkJobErrored, User};
 
 pub struct Sql {
     pub pg: PgPool,
@@ -181,5 +182,50 @@ impl Sql {
         .await?;
         txn.commit().await?;
         Ok(data)
+    }
+
+    pub async fn create_job(&self, data: CreateJob) -> Result<String> {
+        let mut txn = self.pg.begin().await?;
+        let (job_id,): (Uuid,) =
+            sqlx::query_as("insert into jobs (user_id, description, status) values ($1, $2, $3) returning id")
+                .bind(Uuid::parse_str(&data.user_id)?)
+                .bind(&data.description)
+                .bind("pending")
+                .fetch_one(&mut *txn)
+                .await?;
+        txn.commit().await?;
+        Ok(job_id.into())
+    }
+
+    pub async fn mark_job_complete(&self, job_id: &str) -> Result<()> {
+        let mut txn = self.pg.begin().await?;
+
+        let _ = sqlx::query("update jobs set status=$1 where id=$2")
+            .bind("complete")
+            .bind(Uuid::parse_str(job_id)?)
+            .execute(&mut *txn)
+            .await?;
+
+        txn.commit().await?;
+        Ok(())
+    }
+
+    pub async fn mark_job_errored(&self, data: MarkJobErrored) -> Result<()> {
+        let mut txn = self.pg.begin().await?;
+
+        let _ = sqlx::query("update jobs set status=$1 where id=$2")
+            .bind("error")
+            .bind(Uuid::parse_str(&data.job_id)?)
+            .execute(&mut *txn)
+            .await?;
+
+        let _ = sqlx::query("insert into job_errors (job_id, error_data) values ($1, $2)")
+            .bind(Uuid::parse_str(&data.job_id)?)
+            .bind(&data.error)
+            .execute(&mut *txn)
+            .await?;
+
+        txn.commit().await?;
+        Ok(())
     }
 }

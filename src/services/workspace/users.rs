@@ -66,3 +66,12 @@ pub struct WorkspaceUserData {
     pub etag: String,
     pub users: WorkspaceUsers,
 }
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWorkspaceUser {
+    pub primary_email: String,
+    pub name: Name,
+    pub password: String,
+    pub change_password_at_next_login: bool,
+}

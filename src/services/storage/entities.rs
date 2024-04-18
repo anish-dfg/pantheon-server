@@ -52,3 +52,36 @@ pub struct DatasourceView {
     pub datasource_name: String,
     pub metadata: Value,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Job {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub description: String,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
+pub struct CreateJob {
+    pub user_id: String,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct JobError {
+    pub id: Uuid,
+    pub job_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub error_data: Value,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MarkJobErrored {
+    pub job_id: String,
+    pub error: Value,
+}

@@ -1,4 +1,7 @@
-use super::{users::WorkspaceUserData, WorkspaceClient};
+use super::{
+    users::{CreateWorkspaceUser, WorkspaceUser, WorkspaceUserData},
+    WorkspaceClient,
+};
 use anyhow::{Context, Result};
 use axum::async_trait;
 use chrono::Utc;
@@ -38,12 +41,7 @@ pub struct GoogleAccessTokenResponse {
 impl ServiceAccountWorkspaceClient {
     const BEARER_TOKEN_GRANT_TYPE: &'static str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
-    pub fn new(
-        client_email: &str,
-        private_key_id: &str,
-        private_key: &str,
-        token_uri: &str,
-    ) -> Self {
+    pub fn new(client_email: &str, private_key_id: &str, private_key: &str, token_uri: &str) -> Self {
         Self {
             client_email: client_email.into(),
             private_key_id: private_key_id.into(),
@@ -69,8 +67,7 @@ impl ServiceAccountWorkspaceClient {
         let assertion = jsonwebtoken::encode(
             &header,
             &assertion_claims,
-            &EncodingKey::from_rsa_pem(self.private_key.as_bytes())
-                .context("create assertion token")?,
+            &EncodingKey::from_rsa_pem(self.private_key.as_bytes()).context("create assertion token")?,
         )?;
         Ok(assertion)
     }
@@ -102,18 +99,28 @@ impl ServiceAccountWorkspaceClient {
 #[async_trait]
 impl WorkspaceClient for ServiceAccountWorkspaceClient {
     async fn list_users(&self, impersonate: &str) -> Result<WorkspaceUserData> {
-        let access_token = self.get_access_token(
-            impersonate,
-            "https://www.googleapis.com/auth/admin.directory.user.readonly",
-        );
+        // let access_token = self.get_access_token(
+        //     impersonate,
+        //     "https://www.googleapis.com/auth/admin.directory.user.readonly",
+        // );
         todo!()
     }
 
-    async fn create_user(&self, impersonate: &str) -> Result<()> {
-        let access_token = self.get_access_token(
-            impersonate,
-            "https://www.googleapis.com/auth/admin.directory.user",
-        );
-        todo!()
+    async fn create_user(&self, impersonate: &str, user: CreateWorkspaceUser) -> Result<()> {
+        let access_token = self
+            .get_access_token(impersonate, "https://www.googleapis.com/auth/admin.directory.user")
+            .await?;
+        let auth_header = format!("Bearer {access_token}");
+        let url = "https://admin.googleapis.com/admin/directory/v1/users";
+
+        let _ = self
+            .http
+            .post(url)
+            .header("Authorization", auth_header)
+            .json(&user)
+            .send()
+            .await?;
+
+        Ok(())
     }
 }

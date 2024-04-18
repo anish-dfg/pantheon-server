@@ -1599,6 +1599,7 @@ dependencies = [
  "log",
  "mobc",
  "mobc-redis",
+ "rand",
  "reqwest",
  "serde",
  "serde_json",
