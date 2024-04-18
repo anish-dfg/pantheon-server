@@ -1,8 +1,6 @@
 mod v1;
 
-use std::sync::Arc;
-
-use axum::{routing, Router};
+use axum::Router;
 
 use crate::state::AppState;
 

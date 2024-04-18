@@ -12,7 +12,9 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use uuid::Uuid;
 
-use self::entities::{CreateDatasourceView, CreateJob, CreateUser, DatasourceView, EditUser, MarkJobErrored, User};
+use self::entities::{
+    CreateDatasourceView, CreateJob, CreateUser, DatasourceView, EditUser, Job, MarkJobErrored, User,
+};
 
 pub struct Sql {
     pub pg: PgPool,
@@ -227,5 +229,16 @@ impl Sql {
 
         txn.commit().await?;
         Ok(())
+    }
+
+    pub async fn fetch_jobs(&self) -> Result<Vec<Job>> {
+        let mut txn = self.pg.begin().await?;
+        let jobs: Vec<Job> =
+            sqlx::query_as("select id, user_id, description, status, created_at, updated_at from jobs")
+                .fetch_all(&mut *txn)
+                .await?;
+
+        txn.commit().await?;
+        Ok(jobs)
     }
 }
