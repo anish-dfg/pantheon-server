@@ -8,6 +8,6 @@ pub mod users;
 
 #[async_trait]
 pub trait WorkspaceClient: Send + Sync {
-    async fn list_users(&self, impersonate: &str) -> Result<WorkspaceUserData>;
+    async fn list_users(&self, impersonate: &str) -> Result<reqwest::StatusCode>;
     async fn create_user(&self, impersonate: &str, user: CreateWorkspaceUser) -> Result<()>;
 }

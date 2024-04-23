@@ -4,84 +4,73 @@ use serde_json::Value;
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateUser {
-    pub email: String,
-    pub first_name: String,
-    pub last_name: String,
-    pub image_uri: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct EditUser {
-    pub email: String,
-    pub first_name: String,
-    pub last_name: String,
-    pub image_uri: String,
-}
+use super::types::{JobStatus, JobType, SupportedDatasource};
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct User {
     pub id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub email: String,
     pub first_name: String,
     pub last_name: String,
     pub image_uri: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateDatasourceView {
-    pub view_name: String,
-    pub description: String,
-    pub datasource_name: String,
-    pub metadata: Value,
-    pub user_id: String,
-}
+pub type Users = Vec<User>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct DatasourceView {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub description: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub user_id: Uuid,
     pub view_name: String,
-    pub datasource_name: String,
+    pub datasource: SupportedDatasource,
+    pub description: String,
     pub metadata: Value,
 }
+
+pub type DatasourceViews = Vec<DatasourceView>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: Uuid,
-    pub user_id: Uuid,
-    pub description: String,
-    pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub user_id: Uuid,
+    pub status: JobStatus,
+    pub job_type: JobType,
+    pub metadata: Value,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
-pub struct CreateJob {
-    pub user_id: String,
-    pub description: String,
-}
+pub type Jobs = Vec<Job>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct JobError {
+pub struct DatasourceViewJob {
     pub id: Uuid,
-    pub job_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub error_data: Value,
+    pub user_id: Uuid,
+    pub job_id: Uuid,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MarkJobErrored {
-    pub job_id: String,
-    pub error: Value,
+pub type DatasourceViewJobs = Vec<DatasourceViewJob>;
+
+#[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportedUser {
+    pub id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub first_name: String,
+    pub last_name: String,
+    pub email: String,
+    pub exported_from: SupportedDatasource,
 }
+
+pub type ExportedUsers = Vec<ExportedUser>;

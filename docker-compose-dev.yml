@@ -34,6 +34,6 @@ services:
     container_name: dfg-redis-ui
     image: redislabs/redisinsight
     ports:
-      - "8001:8001"
+      - "8001:5540"
     depends_on:
       - redis

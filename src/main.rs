@@ -3,6 +3,9 @@ mod cli;
 mod services;
 mod state;
 
+use std::collections::HashMap;
+use tokio::sync::Mutex;
+
 use clap::Parser;
 use cli::Args;
 use state::{AppState, State};
@@ -10,7 +13,7 @@ use state::{AppState, State};
 use services::{
     airtable::Airtable,
     auth::auth0::Auth0,
-    storage::{Cache, Sql},
+    storage::{Cache, Sql, Storage},
 };
 
 use crate::services::workspace::service_account::ServiceAccountWorkspaceClient;
@@ -42,15 +45,18 @@ async fn main() {
 
     let cache = Cache::new(&args.cache_url).expect("error");
 
-    sqlx::migrate!().run(&sql.pg).await.expect("error running migrations");
+    sqlx::migrate!().run(&sql.pool).await.expect("error running migrations");
+
+    let db = Storage { db: sql, cache };
 
     let state = AppState::new(State {
         authenticator,
         workspace_client,
         airtable,
-        sql,
-        cache,
+        storage: db,
+        tasks: Mutex::new(HashMap::new()),
     });
+
     let router = app::routes(state);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8888")
         .await

@@ -1,173 +1,265 @@
 use anyhow::{bail, Result};
 use axum::{
-    extract::{Path, Request, State},
+    extract::{Path, Query, Request, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Extension, Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
+use tokio::task;
+use uuid::Uuid;
 
 use crate::{
-    app::errors::AppError,
+    app::{
+        api::{
+            api_response::{ApiResponseBuilder, ApiResponseData},
+            v1::datasource::{
+                requests::AirtableDatasourceViewRequestMetadata,
+                responses::{AirtableViewData, AirtableViewDataBuilder, DatasourceViewResponse},
+            },
+        },
+        errors::AppError,
+        jobs,
+    },
     services::{
-        airtable::{ListRecordsOptions, ListRecordsResponse},
+        airtable::ListRecordsOptionsBuilder,
         auth::userdata::UserData,
         storage::{
-            entities::{CreateDatasourceView, CreateUser, DatasourceView},
-            Cache,
+            dto::{CreateDatasourceViewBuilder, CreateJobBuilder, CreateJobWithDatasourceBuilder, CreateUserBuilder},
+            entities::DatasourceView,
+            types::{JobStatus, JobType, SupportedDatasource},
         },
     },
     state::AppState,
 };
 
-use super::requests::{CreateDatasourceViewRequest, CreateDatasourceViewRequest1, DatasourceViewRequest};
+use super::requests::{CreateDatasourceViewRequest, DatasourceViewRequest};
 
 pub async fn create_airtable(
     State(state): State<AppState>,
     Extension(user_info): Extension<UserData>,
     Json(payload): Json<CreateDatasourceViewRequest>,
 ) -> Result<Response, AppError> {
-    let storage = &state.sql;
-    let UserData::Auth0(user_info) = user_info;
-    let user_id = storage
-        .create_or_fetch_user(CreateUser {
-            email: user_info.email,
-            first_name: user_info.nickname,
-            last_name: "".into(),
-            image_uri: user_info.picture,
-        })
-        .await?;
-
-    let _ = storage
-        .create_datasource_view(CreateDatasourceView {
-            view_name: payload.name.clone(),
-            datasource_name: "airtable".to_owned(),
-            metadata: serde_json::to_value(payload.metadata)?,
-            description: payload.description.clone(),
-            user_id,
-        })
-        .await?;
-
-    Ok((StatusCode::CREATED).into_response())
-}
-
-pub async fn create(
-    State(state): State<AppState>,
-    Extension(user_info): Extension<UserData>,
-    Json(payload): Json<CreateDatasourceViewRequest1>,
-) -> Result<Response, AppError> {
-    let storage = &state.sql;
+    let db = &state.storage.db;
+    let tasks = &state.tasks;
     let UserData::Auth0(user_info) = user_info;
 
-    let user_id = storage
-        .create_or_fetch_user(CreateUser {
-            email: user_info.email,
-            first_name: user_info.nickname,
-            last_name: "".into(),
-            image_uri: user_info.picture,
-        })
-        .await?;
+    let dto = CreateUserBuilder::default()
+        .email(user_info.email)
+        .first_name(user_info.nickname)
+        .last_name("")
+        .image_uri(user_info.picture)
+        .build()?;
 
-    let _ = storage
-        .create_datasource_view(CreateDatasourceView {
-            view_name: payload.view_name.clone(),
-            datasource_name: payload.datasource_name.clone(),
-            metadata: serde_json::to_value(payload.metadata)?,
-            description: payload.description.clone(),
-            user_id,
-        })
-        .await?;
+    let user_id = db.create_or_fetch_user(dto).await?;
+
+    let (base, table, view, fields) = (
+        payload.metadata.base.clone(),
+        payload.metadata.table.clone(),
+        payload.metadata.view.clone(),
+        payload.metadata.fields.clone(),
+    );
+
+    let dto = CreateDatasourceViewBuilder::default()
+        .view_name(payload.name)
+        .datasource(SupportedDatasource::Airtable)
+        .metadata(serde_json::to_value(payload.metadata)?)
+        .description(payload.description)
+        .user_id(Uuid::parse_str(&user_id)?)
+        .build()?;
+
+    let new_datasource_view_id = db.create_datasource_view(dto).await?;
+
+    let dto = CreateJobWithDatasourceBuilder::default()
+        .status(JobStatus::Pending)
+        .job_type(JobType::ImportData)
+        .user_id(Uuid::parse_str(&user_id)?)
+        .metadata(serde_json::json!({"datasource_view_id": new_datasource_view_id}))
+        .datasource_view_id(Uuid::parse_str(&new_datasource_view_id)?)
+        .build()?;
+
+    let (job_id, _) = db.create_job_with_datasource(dto).await.unwrap();
+    let job_uuid = Uuid::parse_str(&job_id)?;
+
+    let state = state.clone();
+
+    let handle = task::spawn(async move {
+        let db = &state.clone().storage.db;
+        let _ = match jobs::fetch_and_cache_airtable_data(
+            state,
+            job_uuid,
+            new_datasource_view_id,
+            base,
+            table,
+            view,
+            fields,
+            None,
+        )
+        .await
+        {
+            Ok(_) => db.mark_job_complete(job_uuid).await,
+            Err(_) => db.mark_job_errored(job_uuid).await,
+        };
+    });
+
+    let mut guard = tasks.lock().await;
+
+    guard.insert(job_id, Some(handle));
 
     Ok((StatusCode::CREATED).into_response())
 }
 
 pub async fn fetch_all(State(state): State<AppState>) -> Result<Response, AppError> {
-    let storage = &state.sql;
+    let db = &state.storage.db;
 
-    let datasource_views = storage.fetch_datasource_views().await?;
+    let datasource_views = db.fetch_datasource_views().await?;
     Ok((StatusCode::OK, Json(datasource_views)).into_response())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum DatasourceViewData {
-    Airtable(ListRecordsResponse<Value>),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CachedDatasourceView {
-    pub record: DatasourceView,
-    pub data: Value,
-}
-
-pub async fn fetch_datasource_view_data(
+pub async fn fetch_airtable_data(
     State(state): State<AppState>,
-    Path((datasource, id)): Path<(String, String)>,
-    Json(payload): Json<DatasourceViewRequest>,
+    Path(id): Path<String>,
+    Extension(user_info): Extension<UserData>,
 ) -> Result<Response, AppError> {
-    dbg!(&payload);
-    let sql = &state.sql;
-    let cache = &state.cache;
-    let airtable = &state.airtable;
-    let Some(datasource_view) = sql.fetch_datasource_view_by_id(&id).await? else {
-        return Ok((StatusCode::BAD_REQUEST, "requested datasource view does not exist").into_response());
+    let (db, cache) = (&state.storage.db, &state.storage.cache);
+
+    let Some(data) = db.fetch_datasource_view(Uuid::parse_str(&id)?).await? else {
+        return Ok((StatusCode::NOT_FOUND).into_response());
     };
 
-    if datasource.as_str() != "airtable" {
-        return Ok((StatusCode::BAD_REQUEST, "unimplemented datasource").into_response());
-    };
-
-    let id = datasource_view.id.clone().to_string();
-    if let Some(cached) = cache.get_json::<CachedDatasourceView>(&id).await? {
-        log::info!("returning cached");
-        return Ok((
-            StatusCode::OK,
-            Json(serde_json::json!({"records": cached.data, "cached": true, "view": cached.record})),
-        )
-            .into_response());
-    };
-
-    let (Some(base), Some(table), Some(view)) = (
-        datasource_view.metadata["base"].as_str(),
-        datasource_view.metadata["table"].as_str(),
-        datasource_view.metadata["view"].as_str(),
-    ) else {
-        return Ok((StatusCode::BAD_REQUEST, "missing metadata").into_response());
-    };
-
-    match payload {
-        DatasourceViewRequest::Airtable { offset } => {
-            let records_response = airtable
-                .list_all_records::<Value>(
-                    base,
-                    table,
-                    &mut ListRecordsOptions {
-                        fields: datasource_view.metadata["fields"]
-                            .as_array()
-                            .map(|fields| fields.iter().filter_map(|f| f.as_str()).map(|f| f.to_owned()).collect()),
-                        view: view.to_owned().into(),
-                        offset,
-                    },
-                )
-                .await?;
-
-            cache
-                .set_json(
-                    &id,
-                    CachedDatasourceView {
-                        record: datasource_view.clone(),
-                        data: serde_json::to_value(&records_response)?,
-                    },
-                )
-                .await?;
-
-            Ok((
-                StatusCode::OK,
-                Json(serde_json::json!({"records": records_response, "view": datasource_view})),
-            )
-                .into_response())
+    let records = match cache.get_json::<Value>(&data.id.to_string()).await? {
+        Some(Value::Array(records)) => records,
+        Some(_) => {
+            // the fuck happened here
+            cache.evict(&data.id.to_string()).await?;
+            return Ok((StatusCode::INTERNAL_SERVER_ERROR).into_response());
         }
-        DatasourceViewRequest::Google => Ok((StatusCode::BAD_REQUEST).into_response()),
-    }
+        None => {
+            let state = state.clone();
+
+            let metadata = serde_json::from_value::<AirtableDatasourceViewRequestMetadata>(data.metadata.clone())?;
+            let UserData::Auth0(user_info) = user_info;
+
+            let dto = CreateUserBuilder::default()
+                .email(user_info.email)
+                .first_name(user_info.nickname)
+                .last_name("")
+                .image_uri(user_info.picture)
+                .build()?;
+
+            let user_id = db.create_or_fetch_user(dto).await?;
+
+            let dto = CreateJobWithDatasourceBuilder::default()
+                .status(JobStatus::Pending)
+                .job_type(JobType::ImportData)
+                .user_id(Uuid::parse_str(&user_id)?)
+                .metadata(serde_json::json!({"datasource_view_id": &data.id}))
+                .datasource_view_id(data.id)
+                .build()?;
+
+            let (job_id, _) = db.create_job_with_datasource(dto).await?;
+            let job_uuid = Uuid::parse_str(&job_id)?;
+
+            // this task is not cancellable so there is not `let handle = task::spawn(async move
+            // {...})`
+            task::spawn(async move {
+                let db = &state.clone().storage.db;
+                let _ = match jobs::fetch_and_cache_airtable_data(
+                    state,
+                    job_uuid,
+                    data.id.to_string(),
+                    metadata.base,
+                    metadata.table,
+                    metadata.view,
+                    metadata.fields,
+                    None,
+                )
+                .await
+                {
+                    Ok(_) => db.mark_job_complete(job_uuid).await,
+                    Err(_) => db.mark_job_errored(job_uuid).await,
+                };
+            });
+            vec![]
+        }
+    };
+
+    let airtable_view_data = AirtableViewDataBuilder::default().data(data).records(records).build()?;
+    let res = ApiResponseBuilder::default()
+        .status_code(StatusCode::OK)
+        .data(ApiResponseData::Data(airtable_view_data))
+        .build()?
+        .into_response();
+
+    Ok(res)
+}
+
+pub async fn refresh_airtable_data(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Extension(user_info): Extension<UserData>,
+) -> Result<Response, AppError> {
+    log::info!("HERE");
+    let db = &state.storage.db;
+
+    let Some(data) = db.fetch_datasource_view(Uuid::parse_str(&id)?).await? else {
+        return Ok((StatusCode::NOT_FOUND).into_response());
+    };
+
+    let UserData::Auth0(user_info) = user_info;
+
+    let dto = CreateUserBuilder::default()
+        .email(user_info.email)
+        .first_name(user_info.nickname)
+        .last_name("")
+        .image_uri(user_info.picture)
+        .build()?;
+
+    let user_id = db.create_or_fetch_user(dto).await?;
+
+    let dto = CreateJobWithDatasourceBuilder::default()
+        .status(JobStatus::Pending)
+        .job_type(JobType::ImportData)
+        .user_id(Uuid::parse_str(&user_id)?)
+        .metadata(serde_json::json!({"datasource_view_id": &data.id}))
+        .datasource_view_id(data.id)
+        .build()?;
+    let metadata = serde_json::from_value::<AirtableDatasourceViewRequestMetadata>(data.metadata.clone())?;
+
+    let (job_id, _) = db.create_job_with_datasource(dto).await?;
+    let job_uuid = Uuid::parse_str(&job_id)?;
+
+    task::spawn(async move {
+        let db = &state.clone().storage.db;
+        let _ = match jobs::fetch_and_cache_airtable_data(
+            state,
+            job_uuid,
+            data.id.to_string(),
+            metadata.base,
+            metadata.table,
+            metadata.view,
+            metadata.fields,
+            None,
+        )
+        .await
+        {
+            Ok(_) => db.mark_job_complete(job_uuid).await,
+            Err(_) => db.mark_job_errored(job_uuid).await,
+        };
+    });
+
+    Ok((StatusCode::OK).into_response())
+}
+
+pub async fn list_datasource_jobs(State(state): State<AppState>, Path(id): Path<String>) -> Result<Response, AppError> {
+    let db = &state.storage.db;
+    let jobs = db.fetch_datasource_view_jobs(Uuid::parse_str(&id)?).await?;
+
+    let res = ApiResponseBuilder::default()
+        .data(ApiResponseData::Data(jobs))
+        .status_code(StatusCode::OK)
+        .build()?
+        .into_response();
+    Ok(res)
 }

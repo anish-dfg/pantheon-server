@@ -5,9 +5,13 @@ pub mod schema;
 #[cfg(test)]
 mod tests;
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
+use derive_builder::Builder;
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use tokio::time;
 
 use self::{bases::Bases, record::Record, schema::Schema};
 
@@ -16,10 +20,13 @@ pub struct Airtable {
     pub api_token: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Builder, Clone, Debug, Serialize, Deserialize)]
 pub struct ListRecordsOptions {
+    #[builder(setter(into))]
     pub fields: Option<Vec<String>>,
+    #[builder(setter(into))]
     pub view: Option<String>,
+    #[builder(setter(into))]
     pub offset: Option<String>,
 }
 
@@ -87,15 +94,20 @@ impl Airtable {
         let mut records = res.records.clone();
         opts.offset = res.offset.clone();
 
-        dbg!(&records.len());
         let mut length = res.records.len();
 
+        log::info!("WE ARE HERE");
+        let mut iteration = 0;
         while length >= 100 {
+            if iteration % 4 == 0 {
+                time::sleep(Duration::from_secs(1)).await;
+            }
+
             res = self.list_records::<T>(base_id, table_id_or_name, opts).await?;
             length = res.records.len();
             opts.offset = res.offset.clone();
             records.append(&mut res.records);
-            dbg!(&records.len());
+            iteration += 1;
         }
 
         Ok(records)

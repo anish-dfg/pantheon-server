@@ -33,7 +33,7 @@ struct AssertionClaims {
     pub exp: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GoogleAccessTokenResponse {
     pub access_token: String,
 }
@@ -69,6 +69,7 @@ impl ServiceAccountWorkspaceClient {
             &assertion_claims,
             &EncodingKey::from_rsa_pem(self.private_key.as_bytes()).context("create assertion token")?,
         )?;
+
         Ok(assertion)
     }
 
@@ -81,7 +82,7 @@ impl ServiceAccountWorkspaceClient {
 
         let res = self
             .http
-            .get(&self.token_uri)
+            .post(&self.token_uri)
             .json(&assertion)
             .send()
             .await
@@ -98,28 +99,33 @@ impl ServiceAccountWorkspaceClient {
 
 #[async_trait]
 impl WorkspaceClient for ServiceAccountWorkspaceClient {
-    async fn list_users(&self, impersonate: &str) -> Result<WorkspaceUserData> {
+    async fn list_users(&self, impersonate: &str) -> Result<reqwest::StatusCode> {
+        let res = self.http.get("https://google.com").send().await?;
         // let access_token = self.get_access_token(
         //     impersonate,
         //     "https://www.googleapis.com/auth/admin.directory.user.readonly",
         // );
-        todo!()
+        Ok(res.status())
     }
 
     async fn create_user(&self, impersonate: &str, user: CreateWorkspaceUser) -> Result<()> {
         let access_token = self
             .get_access_token(impersonate, "https://www.googleapis.com/auth/admin.directory.user")
             .await?;
+        dbg!(&access_token);
+
         let auth_header = format!("Bearer {access_token}");
         let url = "https://admin.googleapis.com/admin/directory/v1/users";
 
-        let _ = self
+        let res = self
             .http
             .post(url)
             .header("Authorization", auth_header)
             .json(&user)
             .send()
             .await?;
+
+        dbg!(&res.text().await?);
 
         Ok(())
     }

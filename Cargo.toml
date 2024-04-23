@@ -21,6 +21,7 @@ axum = { version = "0.7.5", features = [
 axum-extra = { version = "0.9.3", features = ["typed-header"] }
 chrono = { version = "0.4.37", features = ["serde"] }
 clap = { version = "4.5.4", features = ["derive", "env"] }
+derive_builder = "0.20.0"
 dotenvy = "0.15.7"
 hyper = "1.2.0"
 jsonwebtoken = "9.3.0"

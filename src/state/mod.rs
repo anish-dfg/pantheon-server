@@ -1,18 +1,19 @@
-use std::sync::Arc;
+use anyhow::Error;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
-use crate::services::{
-    airtable::Airtable,
-    auth::Authenticator,
-    storage::{Cache, Sql},
-    workspace::WorkspaceClient,
-};
+use tokio::task::JoinHandle;
+
+use crate::services::{airtable::Airtable, auth::Authenticator, storage::Storage, workspace::WorkspaceClient};
+
+type TaskMap = HashMap<String, Option<JoinHandle<()>>>;
 
 pub struct State {
     pub authenticator: Box<dyn Authenticator>,
     pub workspace_client: Box<dyn WorkspaceClient>,
     pub airtable: Airtable,
-    pub sql: Sql,
-    pub cache: Cache,
+    pub storage: Storage,
+    pub tasks: Mutex<TaskMap>,
 }
 
 pub type AppState = Arc<State>;
