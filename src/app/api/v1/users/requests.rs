@@ -15,12 +15,20 @@ pub struct PasswordPolicy {
     pub generated_password_length: u8,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportUser {
     pub first_name: String,
     pub last_name: String,
     pub email: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+// #[serde(untagged)]
+pub enum ExportConflictPolicy {
+    ExportDifference,
+    Reject,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,4 +37,5 @@ pub struct ExportUsersRequest {
     pub users: Vec<ExportUser>,
     pub email_policy: EmailPolicy,
     pub password_policy: PasswordPolicy,
+    pub export_conflict_policy: ExportConflictPolicy,
 }

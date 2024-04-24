@@ -1,3 +1,4 @@
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 #[allow(clippy::struct_excessive_bools)]
@@ -33,7 +34,7 @@ pub struct WorkspaceUser {
 }
 
 #[allow(clippy::struct_field_names)]
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Builder)]
 #[serde_with::skip_serializing_none]
 #[serde(rename_all = "camelCase")]
 pub struct Name {
@@ -67,7 +68,7 @@ pub struct WorkspaceUserData {
     pub users: WorkspaceUsers,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Builder)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkspaceUser {
     pub primary_email: String,

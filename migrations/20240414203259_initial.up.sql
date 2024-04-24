@@ -4,7 +4,7 @@ begin;
 create extension if not exists "uuid-ossp";
 --
 create type job_status as enum('pending', 'error', 'complete');
-create type job_type as enum('export_users', 'import_data');
+create type job_type as enum('export_data', 'import_data', 'undo_export');
 create type supported_datasource as enum('airtable', 'google_workspace_admin_directory');
 --
 create or replace function update_timestamp()

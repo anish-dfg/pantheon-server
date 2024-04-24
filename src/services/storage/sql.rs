@@ -1,12 +1,17 @@
+use crate::services::workspace::users::Email;
+
 use super::{
     dto::{
         CreateDatasourceView, CreateDatasourceViewJob, CreateExportedUser, CreateJob, CreateJobWithDatasource,
         CreateUser, EditDatasourceView, EditJob, EditUser,
     },
-    entities::{DatasourceView, DatasourceViewJob, DatasourceViewJobs, DatasourceViews, ExportedUser, Job, Jobs, User},
+    entities::{
+        DatasourceView, DatasourceViewJob, DatasourceViewJobs, DatasourceViews, ExportedUser, ExportedUsers, Job, Jobs,
+        User,
+    },
 };
 use anyhow::Result;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 pub struct Sql {
@@ -332,6 +337,38 @@ impl Sql {
         .fetch_optional(&self.pool)
         .await?;
         Ok(exported_user)
+    }
+
+    pub async fn fetch_exported_users(&self) -> Result<ExportedUsers> {
+        let exported_users = sqlx::query_as::<_, ExportedUser>(
+            "select id, created_at, updated_at, job_id, first_name, last_name, email, exported_from 
+            from exported_users",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(exported_users)
+    }
+
+    pub async fn save_exported_users(&self, users: Vec<CreateExportedUser>) -> Result<()> {
+        let mut txn = self.pool.begin().await?;
+
+        QueryBuilder::<Postgres>::new(
+            "insert into exported_users (job_id, first_name, last_name, email, exported_from) ",
+        )
+        .push_values(users.into_iter(), |mut b, p| {
+            b.push_bind(p.job_id)
+                .push_bind(p.first_name)
+                .push_bind(p.last_name)
+                .push_bind(p.email)
+                .push_bind(p.exported_from);
+        })
+        .build()
+        .execute(&mut *txn)
+        .await?;
+
+        txn.commit().await?;
+        Ok(())
     }
 
     pub async fn fetch_datasource_view_jobs(&self, datasource_view_id: Uuid) -> Result<Jobs> {

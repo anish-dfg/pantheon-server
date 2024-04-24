@@ -94,6 +94,7 @@ pub struct CreateDatasourceViewJob {
 #[derive(Debug, Builder, Clone, Serialize, Deserialize)]
 #[builder(setter(into))]
 pub struct CreateExportedUser {
+    pub job_id: Uuid,
     pub first_name: String,
     pub last_name: String,
     pub email: String,

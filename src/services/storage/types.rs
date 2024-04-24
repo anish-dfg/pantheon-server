@@ -21,7 +21,7 @@ impl TryInto<SupportedDatasource> for String {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Type, Copy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Type, Copy, Clone, PartialEq, Eq)]
 #[sqlx(type_name = "job_status", rename_all = "snake_case")]
 pub enum JobStatus {
     Pending,
@@ -45,6 +45,7 @@ impl TryInto<JobStatus> for &str {
 #[derive(Debug, Serialize, Deserialize, Type, Copy, Clone)]
 #[sqlx(type_name = "job_type", rename_all = "snake_case")]
 pub enum JobType {
-    ExportUsers,
+    ExportData,
     ImportData,
+    UndoExport,
 }
