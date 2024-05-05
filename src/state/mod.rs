@@ -1,4 +1,5 @@
 use anyhow::Error;
+use sendgrid::SGClient;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -14,6 +15,7 @@ pub struct State {
     pub airtable: Airtable,
     pub storage: Storage,
     pub tasks: Mutex<TaskMap>,
+    pub mail: SGClient,
 }
 
 pub type AppState = Arc<State>;

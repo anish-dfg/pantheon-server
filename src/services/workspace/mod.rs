@@ -10,4 +10,5 @@ pub mod users;
 pub trait WorkspaceClient: Send + Sync {
     async fn list_users(&self, impersonate: &str) -> Result<reqwest::StatusCode>;
     async fn create_user(&self, impersonate: &str, user: CreateWorkspaceUser) -> Result<()>;
+    async fn delete_user(&self, impersonate: &str, user: &str) -> Result<()>;
 }

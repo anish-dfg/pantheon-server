@@ -69,7 +69,8 @@ pub struct ExportedUser {
     pub updated_at: DateTime<Utc>,
     pub first_name: String,
     pub last_name: String,
-    pub email: String,
+    pub personal_email: String,
+    pub generated_email: String,
     pub exported_from: SupportedDatasource,
 }
 

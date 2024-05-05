@@ -20,4 +20,6 @@ pub struct Args {
     pub database_url: String,
     #[arg(long, env)]
     pub cache_url: String,
+    #[arg(long, env)]
+    pub sendgrid_api_key: String,
 }

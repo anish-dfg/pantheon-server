@@ -42,7 +42,7 @@ impl TryInto<JobStatus> for &str {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Type, Copy, Clone)]
+#[derive(Debug, Serialize, Deserialize, Type, Copy, Clone, PartialEq, Eq)]
 #[sqlx(type_name = "job_type", rename_all = "snake_case")]
 pub enum JobType {
     ExportData,

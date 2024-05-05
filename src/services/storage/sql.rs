@@ -300,13 +300,14 @@ impl Sql {
     pub async fn create_exported_user(&self, data: CreateExportedUser) -> Result<String> {
         let mut txn = self.pool.begin().await?;
         let (exported_user_id,) = sqlx::query_as::<_, (Uuid,)>(
-            "insert into exported_users (first_name, last_name, email, exported_from)
+            "insert into exported_users (first_name, last_name, personal_email, generated_email, exported_from)
             values ($1, $2, $3, $4)
             returning id",
         )
         .bind(&data.first_name)
         .bind(&data.last_name)
-        .bind(&data.email)
+        .bind(&data.personal_email)
+        .bind(&data.generated_email)
         .bind(data.exported_from)
         .fetch_one(&mut *txn)
         .await?;
@@ -328,9 +329,21 @@ impl Sql {
         Ok(())
     }
 
+    pub async fn delete_exported_user_by_email(&self, email: &str) -> Result<()> {
+        let mut txn = self.pool.begin().await?;
+        sqlx::query("delete from exported_users where email = $1")
+            .bind(email)
+            .execute(&mut *txn)
+            .await?;
+
+        txn.commit().await?;
+
+        Ok(())
+    }
+
     pub async fn fetch_exported_user(&self, exported_user_id: &str) -> Result<Option<ExportedUser>> {
         let exported_user = sqlx::query_as::<_, ExportedUser>(
-            "select id, created_at, updated_at, job_id, first_name, last_name, email, exported_from 
+            "select id, created_at, updated_at, job_id, first_name, last_name, personal_email, generated_email, exported_from 
             from exported_users where id = $1",
         )
         .bind(Uuid::parse_str(exported_user_id)?)
@@ -341,7 +354,7 @@ impl Sql {
 
     pub async fn fetch_exported_users(&self) -> Result<ExportedUsers> {
         let exported_users = sqlx::query_as::<_, ExportedUser>(
-            "select id, created_at, updated_at, job_id, first_name, last_name, email, exported_from 
+            "select id, created_at, updated_at, job_id, first_name, last_name, personal_email, generated_email, exported_from 
             from exported_users",
         )
         .fetch_all(&self.pool)
@@ -354,13 +367,14 @@ impl Sql {
         let mut txn = self.pool.begin().await?;
 
         QueryBuilder::<Postgres>::new(
-            "insert into exported_users (job_id, first_name, last_name, email, exported_from) ",
+            "insert into exported_users (job_id, first_name, last_name, personal_email, generated_email, exported_from) ",
         )
         .push_values(users.into_iter(), |mut b, p| {
             b.push_bind(p.job_id)
                 .push_bind(p.first_name)
                 .push_bind(p.last_name)
-                .push_bind(p.email)
+                .push_bind(p.personal_email)
+                .push_bind(p.generated_email)
                 .push_bind(p.exported_from);
         })
         .build()
@@ -382,5 +396,24 @@ impl Sql {
         .fetch_all(&self.pool)
         .await?;
         Ok(jobs)
+    }
+
+    pub async fn fetch_exported_users_by_job(&self, job_id: Uuid) -> Result<ExportedUsers> {
+        let users = sqlx::query_as::<_, ExportedUser>(
+            "select id, created_at, updated_at, job_id, first_name, last_name, personal_email, generated_email, exported_from 
+            from exported_users where job_id=$1",
+        )
+        .bind(job_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(users)
+    }
+
+    pub async fn fetch_exported_users_by_view(&self, view_id: Uuid) -> Result<ExportedUsers> {
+        let users = sqlx::query_as::<_, ExportedUser>(
+            "select id, created_at, updated_at, job_id, first_name, last_name, personal_email, generated_email, exported_from 
+            from exported_users where job_id in (select job_id from datasource_view_jobs where datasource_view_id=$1)",
+        ).bind(view_id).fetch_all(&self.pool).await?;
+        Ok(users)
     }
 }

@@ -81,7 +81,8 @@ create table if not exists exported_users (
   job_id uuid not null references jobs(id) on delete cascade,
   first_name text not null,
   last_name text not null,
-  email text not null,
+  personal_email text not null,
+  generated_email text not null,
   exported_from supported_datasource not null
 );
 create or replace trigger update_exported_users_timestamp 

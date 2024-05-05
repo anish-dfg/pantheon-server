@@ -3,6 +3,7 @@ mod cli;
 mod services;
 mod state;
 
+use sendgrid::SGClient;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 
@@ -55,6 +56,7 @@ async fn main() {
         airtable,
         storage: db,
         tasks: Mutex::new(HashMap::new()),
+        mail: SGClient::new(&args.sendgrid_api_key),
     });
 
     let router = app::routes(state);

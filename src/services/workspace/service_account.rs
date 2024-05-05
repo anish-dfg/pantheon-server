@@ -112,12 +112,11 @@ impl WorkspaceClient for ServiceAccountWorkspaceClient {
         let access_token = self
             .get_access_token(impersonate, "https://www.googleapis.com/auth/admin.directory.user")
             .await?;
-        dbg!(&access_token);
 
         let auth_header = format!("Bearer {access_token}");
         let url = "https://admin.googleapis.com/admin/directory/v1/users";
 
-        let res = self
+        let _ = self
             .http
             .post(url)
             .header("Authorization", auth_header)
@@ -125,7 +124,23 @@ impl WorkspaceClient for ServiceAccountWorkspaceClient {
             .send()
             .await?;
 
-        dbg!(&res.text().await?);
+        Ok(())
+    }
+
+    async fn delete_user(&self, impersonate: &str, user: &str) -> Result<()> {
+        let access_token = self
+            .get_access_token(impersonate, "https://www.googleapis.com/auth/admin.directory.user")
+            .await?;
+
+        let auth_header = format!("Bearer {access_token}");
+        let url = format!("https://admin.googleapis.com/admin/directory/v1/users/{user}");
+
+        let _ = self
+            .http
+            .delete(url)
+            .header("Authorization", auth_header)
+            .send()
+            .await?;
 
         Ok(())
     }
